@@ -31,7 +31,8 @@
     "start": "node dist/server.js",
     "fixture": "npm run build:client && node --experimental-strip-types --no-warnings fixture/start.ts",
     "test:e2e": "playwright test",
-    "test:all": "npm test && npm run test:e2e"
+    "test:all": "npm test && npm run test:e2e",
+    "readme-images": "npm run build:client && node --experimental-strip-types --no-warnings scripts/readme-images.ts"
   },
   "dependencies": {
     "html2canvas": "^1.4.1"

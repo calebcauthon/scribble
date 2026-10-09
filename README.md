@@ -12,6 +12,8 @@ browser ──POST /report──▶ report-button server ──▶ commit screen
                                                 └▶ create issue in <repo> (screenshot inline)
 ```
 
+![The report flow: a floating button, a frozen capture with masking, drawing tools, a note, and send](docs/annotate.png)
+
 ## What the user gets
 
 - A floating button in a corner of the page.
@@ -149,6 +151,10 @@ init({
 
 The `?raw=true` blob URL renders for private repos too, for anyone who can see the repo.
 
+Rendered, it looks like this (as shown by the fake GitHub in `fixture/`, which mirrors GitHub's markdown):
+
+<img src="docs/issue.png" alt="The filed issue: title from the note, the annotated screenshot inline, and a table of page, viewport, browser and context rows" width="700">
+
 ## Things to know
 
 - **The endpoint is public by design.** The reporter's browser has no credentials. Lock
@@ -211,6 +217,7 @@ npm run test:e2e   # Playwright, see above
 npm run test:all
 npm run typecheck
 npm run build      # dist/report-button.js (script tag), dist/report-button.esm.js, dist/server.js
+npm run readme-images  # regenerate docs/annotate.png and docs/issue.png from a live run
 ```
 
 ## Origin

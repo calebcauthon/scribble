@@ -208,7 +208,7 @@ const STYLE = `<style>
   .label{display:inline-block;background:#ddf4ff;color:#0969da;border-radius:999px;padding:0 8px;font-size:12px;margin-right:4px}
   img{max-width:100%;border:1px solid #d0d7de;border-radius:6px}
   blockquote{border-left:3px solid #d0d7de;margin:12px 0;padding:0 12px;color:#656d76}
-  table{border-collapse:collapse;margin:12px 0} td{border:1px solid #d0d7de;padding:4px 10px;vertical-align:top;word-break:break-all}
+  table{border-collapse:collapse;margin:12px 0} td{border:1px solid #d0d7de;padding:4px 10px;vertical-align:top;overflow-wrap:anywhere} td:first-child{white-space:nowrap}
   a{color:#0969da} sub{color:#656d76}
 </style>`
 

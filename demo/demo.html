@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>report-button demo</title>
+  <style>
+    body { font: 16px/1.5 system-ui, -apple-system, sans-serif; margin: 0; color: #222; background: #fafafa; }
+    main { max-width: 720px; margin: 0 auto; padding: 32px 16px 120px; }
+    h1 { font-size: 28px; margin: 0 0 8px; }
+    .card { background: #fff; border: 1px solid #e3e3e3; border-radius: 10px; padding: 16px 20px; margin: 16px 0; }
+    label { display: block; margin: 8px 0 4px; font-weight: 600; font-size: 14px; }
+    input { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font: inherit; }
+    .broken { color: #b00020; }
+    code { background: #eee; padding: 1px 5px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>report-button demo</h1>
+    <p>This page is served by the report-button server. Click <strong>Report a problem</strong> in the
+      corner, draw on the screenshot, type a note, and send. An issue appears in the configured repo.</p>
+
+    <div class="card">
+      <h2>Order #4821</h2>
+      <p>Status: <span class="broken">⚠ undefined</span> (this is the bug you might circle)</p>
+      <p>Total: $128.40 · Items: 3 · Shipping: Standard</p>
+    </div>
+
+    <div class="card">
+      <h2>Masking</h2>
+      <p>The password field and the element marked <code>data-report-mask</code> are blacked out in the
+        screenshot. You see the masking in the overlay before you send.</p>
+      <label for="email">Email</label>
+      <input id="email" value="pat@example.com">
+      <label for="pw">Password</label>
+      <input id="pw" type="password" value="hunter2">
+      <label>Secret</label>
+      <div data-report-mask>API key: sk-live-0000-this-should-not-leak</div>
+    </div>
+
+    <div class="card">
+      <h2>Below the fold</h2>
+      <p>Scroll down and report again: the capture is the visible viewport at the moment you click.</p>
+      <p style="height: 900px"></p>
+      <p>Bottom of the page.</p>
+    </div>
+  </main>
+
+  <!-- Auto-mounts from data attributes. Endpoint defaults to /report on this host. -->
+  <script src="/report-button.js" data-link-to-issue data-manual></script>
+  <script>
+    // Manual init so we can pass a context() function; drop `data-manual` to let
+    // the script tag mount itself instead.
+    ReportButton.init({
+      endpoint: '/report',
+      linkToIssue: true,
+      context: () => ({ 'Demo user': 'pat@example.com', Build: 'demo' }),
+    })
+  </script>
+</body>
+</html>

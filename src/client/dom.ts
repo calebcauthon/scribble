@@ -10,9 +10,11 @@ export const HIDDEN_ATTR = 'data-report-hidden'
  * when OpenReplay's tracker is on the page, the overlay is kept out of the
  * session replay as well. Harmless when it is not.
  */
-export function hide<T extends HTMLElement>(el: T): T {
+export function hide<T extends HTMLElement>(el: T, role?: string): T {
   el.setAttribute(HIDDEN_ATTR, '1')
   el.setAttribute('data-openreplay-hidden', '1')
+  // Stable hook for tests and host-page CSS, e.g. `[data-report-role="button"]`.
+  if (role) el.setAttribute('data-report-role', role)
   return el
 }
 

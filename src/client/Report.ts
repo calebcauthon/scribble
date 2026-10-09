@@ -118,7 +118,7 @@ export default class ReportButton {
   // ---------------------------------------------------------------------------
 
   private mountButton() {
-    const btn = hide(document.createElement('button'))
+    const btn = hide(document.createElement('button'), 'button')
     btn.type = 'button'
     btn.textContent = this.options.buttonLabel
 
@@ -284,7 +284,7 @@ export default class ReportButton {
 
   private showToast(text: string, link?: string) {
     this.dismissToast()
-    const toast = hide(document.createElement('div'))
+    const toast = hide(document.createElement('div'), 'toast')
     Object.assign(toast.style, {
       position: 'fixed',
       left: '50%',

@@ -1,59 +1,13 @@
 import { test, after } from 'node:test'
 import assert from 'node:assert/strict'
 import type { AddressInfo } from 'node:net'
-import { createServer } from 'node:http'
 import { createApp, parseReport } from './app.ts'
 import type { Config } from './config.ts'
+import { createGitHubStub, type StubOptions } from '../../fixture/github-stub.ts'
 
 // A 1x1 PNG, enough to exercise the image path end to end.
 const PNG =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
-
-// ---------------------------------------------------------------------------
-// A stub of the slice of GitHub's API the server talks to.
-// ---------------------------------------------------------------------------
-
-interface Call {
-  method: string
-  path: string
-  body: unknown
-}
-
-function stubGitHub(opts: { branchExists: boolean; failIssue?: boolean }) {
-  const calls: Call[] = []
-  const server = createServer((req, res) => {
-    let data = ''
-    req.on('data', (c) => (data += c))
-    req.on('end', () => {
-      const body = data ? JSON.parse(data) : undefined
-      const path = req.url ?? ''
-      calls.push({ method: req.method ?? '', path, body })
-      const reply = (status: number, payload: unknown) => {
-        res.writeHead(status, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify(payload))
-      }
-      if (path.endsWith('/git/ref/heads/report-screenshots')) {
-        return opts.branchExists ? reply(200, { object: { sha: 'parent-sha' } }) : reply(404, { message: 'Not Found' })
-      }
-      if (path.includes('/git/commits/parent-sha')) return reply(200, { tree: { sha: 'base-tree' } })
-      if (path.endsWith('/git/blobs')) return reply(201, { sha: 'blob-sha' })
-      if (path.endsWith('/git/trees')) return reply(201, { sha: 'tree-sha' })
-      if (path.endsWith('/git/commits')) return reply(201, { sha: 'new-commit' })
-      if (path.endsWith('/git/refs') || path.includes('/git/refs/heads/')) return reply(201, { ref: 'ok' })
-      if (path.endsWith('/issues')) {
-        if (opts.failIssue) return reply(403, { message: 'Resource not accessible by personal access token' })
-        return reply(201, { number: 7, html_url: 'https://github.com/acme/app/issues/7' })
-      }
-      reply(404, { message: `unexpected ${path}` })
-    })
-  })
-  return { server, calls }
-}
-
-async function listen(server: ReturnType<typeof createServer>): Promise<string> {
-  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
-  return `http://127.0.0.1:${(server.address() as AddressInfo).port}`
-}
 
 function configFor(apiUrl: string, extra: Partial<Config> = {}): Config {
   return {
@@ -75,15 +29,20 @@ function configFor(apiUrl: string, extra: Partial<Config> = {}): Config {
   }
 }
 
-const servers: ReturnType<typeof createServer>[] = []
-after(() => servers.forEach((s) => s.close()))
+const cleanups: (() => void)[] = []
+after(() => cleanups.forEach((c) => c()))
 
-async function boot(gh: ReturnType<typeof stubGitHub>, extra: Partial<Config> = {}) {
-  const apiUrl = await listen(gh.server)
+async function boot(stubOpts: StubOptions, extra: Partial<Config> = {}) {
+  const gh = createGitHubStub(stubOpts)
+  const apiUrl = await gh.listen()
   const app = createApp({ config: configFor(apiUrl, extra), log: () => {} })
-  const base = await listen(app)
-  servers.push(gh.server, app)
-  return base
+  await new Promise<void>((r) => app.listen(0, '127.0.0.1', r))
+  const base = `http://127.0.0.1:${(app.address() as AddressInfo).port}`
+  cleanups.push(() => {
+    app.close()
+    void gh.close()
+  })
+  return { gh, base }
 }
 
 const payload = (over: Record<string, unknown> = {}) => ({
@@ -102,8 +61,7 @@ const payload = (over: Record<string, unknown> = {}) => ({
 // ---------------------------------------------------------------------------
 
 test('files an issue with the screenshot committed to the asset branch', async () => {
-  const gh = stubGitHub({ branchExists: true })
-  const base = await boot(gh)
+  const { gh, base } = await boot({ branchExists: true })
 
   const res = await fetch(`${base}/report`, {
     method: 'POST',
@@ -113,50 +71,65 @@ test('files an issue with the screenshot committed to the asset branch', async (
   assert.equal(res.status, 201)
   assert.equal(res.headers.get('access-control-allow-origin'), '*')
   assert.deepEqual(await res.json(), {
-    issueUrl: 'https://github.com/acme/app/issues/7',
-    issueNumber: 7,
+    issueUrl: `${gh.url}/acme/app/issues/1`,
+    issueNumber: 1,
     reportId: 'abc-123',
   })
 
-  const methods = gh.calls.map((c) => `${c.method} ${c.path}`)
-  assert.deepEqual(methods, [
-    'GET /repos/acme/app/git/ref/heads/report-screenshots',
-    'GET /repos/acme/app/git/commits/parent-sha',
-    'POST /repos/acme/app/git/blobs',
-    'POST /repos/acme/app/git/trees',
-    'POST /repos/acme/app/git/commits',
-    'PATCH /repos/acme/app/git/refs/heads/report-screenshots',
-    'POST /repos/acme/app/issues',
-  ])
+  assert.deepEqual(
+    gh.calls.map((c) => `${c.method} ${c.path}`),
+    [
+      'GET /repos/acme/app/git/ref/heads/report-screenshots',
+      'GET /repos/acme/app/git/commits/parent-sha',
+      'POST /repos/acme/app/git/blobs',
+      'POST /repos/acme/app/git/trees',
+      'POST /repos/acme/app/git/commits',
+      'PATCH /repos/acme/app/git/refs/heads/report-screenshots',
+      'POST /repos/acme/app/issues',
+    ],
+  )
   const tree = gh.calls[3].body as { base_tree: string; tree: { path: string }[] }
-  assert.equal(tree.base_tree, 'base-tree')
+  assert.equal(tree.base_tree, 'tree-of-parent-sha')
   assert.equal(tree.tree[0].path, '2026-10-09/abc-123.png')
   const commit = gh.calls[4].body as { parents: string[] }
   assert.deepEqual(commit.parents, ['parent-sha'])
 
-  const issue = gh.calls[6].body as { title: string; body: string; labels: string[] }
+  // The bytes that landed on the branch are the decoded data URL.
+  const asset = gh.assets.get('2026-10-09/abc-123.png')
+  assert.ok(asset)
+  assert.equal(asset.bytes.toString('base64'), PNG.split(',')[1])
+
+  const issue = gh.issues[0]
   assert.equal(issue.title, 'Button is dead')
   assert.deepEqual(issue.labels, ['user-report'])
-  assert.match(issue.body, /!\[Annotated screenshot\]\(https:\/\/github\.com\/acme\/app\/blob\/report-screenshots\/2026-10-09\/abc-123\.png\?raw=true\)/)
+  assert.match(
+    issue.body,
+    /!\[Annotated screenshot\]\(https:\/\/github\.com\/acme\/app\/blob\/report-screenshots\/2026-10-09\/abc-123\.png\?raw=true\)/,
+  )
   assert.match(issue.body, /\| \*\*User\*\* \| u1 \|/)
 })
 
 test('creates the asset branch as an orphan when it does not exist yet', async () => {
-  const gh = stubGitHub({ branchExists: false })
-  const base = await boot(gh)
+  const { gh, base } = await boot({ branchExists: false })
   const res = await fetch(`${base}/report`, { method: 'POST', body: JSON.stringify(payload()) })
   assert.equal(res.status, 201)
   const methods = gh.calls.map((c) => `${c.method} ${c.path}`)
-  assert.ok(!methods.includes('GET /repos/acme/app/git/commits/parent-sha'))
+  assert.ok(!methods.some((m) => m.includes('/git/commits/parent-sha')))
   const tree = gh.calls.find((c) => c.path.endsWith('/git/trees'))!.body as Record<string, unknown>
   assert.equal('base_tree' in tree, false)
   const commit = gh.calls.find((c) => c.path.endsWith('/git/commits'))!.body as { parents: string[] }
   assert.deepEqual(commit.parents, [])
   assert.ok(methods.includes('POST /repos/acme/app/git/refs'))
+
+  // A second report then fast-forwards the branch instead of recreating it.
+  gh.calls.length = 0
+  await fetch(`${base}/report`, { method: 'POST', body: JSON.stringify(payload({ reportId: 'def-456' })) })
+  assert.ok(gh.calls.some((c) => c.method === 'PATCH' && c.path.endsWith('/git/refs/heads/report-screenshots')))
+  assert.equal(gh.issues.length, 2)
 })
 
 test('rejects bad payloads with 400 and a reason', async () => {
-  const base = await boot(stubGitHub({ branchExists: true }))
+  const { base } = await boot({ branchExists: true })
   const post = (body: string) => fetch(`${base}/report`, { method: 'POST', body })
   assert.equal((await post('not json')).status, 400)
   const noImage = await post(JSON.stringify(payload({ image: 'data:text/plain;base64,aGk=' })))
@@ -165,7 +138,7 @@ test('rejects bad payloads with 400 and a reason', async () => {
 })
 
 test('refuses origins that are not allowed', async () => {
-  const base = await boot(stubGitHub({ branchExists: true }), { allowedOrigins: ['https://ok.example.com'] })
+  const { base } = await boot({ branchExists: true }, { allowedOrigins: ['https://ok.example.com'] })
   const bad = await fetch(`${base}/report`, {
     method: 'POST',
     headers: { Origin: 'https://evil.example.com' },
@@ -178,7 +151,7 @@ test('refuses origins that are not allowed', async () => {
 })
 
 test('rate limits per client ip', async () => {
-  const base = await boot(stubGitHub({ branchExists: true }), { rateLimit: 2 })
+  const { base } = await boot({ branchExists: true }, { rateLimit: 2 })
   const send = () => fetch(`${base}/report`, { method: 'POST', body: JSON.stringify(payload()) })
   assert.equal((await send()).status, 201)
   assert.equal((await send()).status, 201)
@@ -186,7 +159,7 @@ test('rate limits per client ip', async () => {
 })
 
 test('surfaces GitHub failures as 502 with the message', async () => {
-  const base = await boot(stubGitHub({ branchExists: true, failIssue: true }))
+  const { base } = await boot({ branchExists: true, failIssue: true })
   const res = await fetch(`${base}/report`, { method: 'POST', body: JSON.stringify(payload()) })
   assert.equal(res.status, 502)
   assert.match(((await res.json()) as { error: string }).error, /Resource not accessible/)

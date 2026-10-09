@@ -24,11 +24,14 @@
     "build": "npm run build:client && npm run build:server && npm run build:types",
     "build:client": "esbuild src/client/browser.ts --bundle --minify --format=iife --target=es2020 --outfile=dist/report-button.js && esbuild src/client/index.ts --bundle --format=esm --target=es2020 --packages=external --outfile=dist/report-button.esm.js && cp demo/demo.html dist/demo.html",
     "build:server": "esbuild src/server/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/server.js",
-    "build:types": "tsc -p tsconfig.json --emitDeclarationOnly",
+    "build:types": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --experimental-strip-types --no-warnings --test \"src/**/*.test.ts\"",
     "dev": "npm run build:client && node --experimental-strip-types --no-warnings --watch src/server/index.ts",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "fixture": "npm run build:client && node --experimental-strip-types --no-warnings fixture/start.ts",
+    "test:e2e": "playwright test",
+    "test:all": "npm test && npm run test:e2e"
   },
   "dependencies": {
     "html2canvas": "^1.4.1"
@@ -36,6 +39,7 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "esbuild": "^0.25.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "@playwright/test": "^1.50.0"
   }
 }

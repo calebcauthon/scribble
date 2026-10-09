@@ -161,11 +161,54 @@ The `?raw=true` blob URL renders for private repos too, for anyone who can see t
 - **Screenshots are git objects.** Each report is one small commit on the asset branch.
   For a very high-volume site, point `GITHUB_ASSET_REPO` at a dedicated repo.
 
+## Try it without a GitHub token
+
+`fixture/` holds an in-memory fake of the slice of GitHub this server talks to. One
+command boots it next to the real server and demo page:
+
+```bash
+npm run fixture
+# demo page   http://localhost:8787/demo     click the button, draw, send
+# fake GitHub http://localhost:8790          see the issue and screenshot that landed
+```
+
+The fake renders each issue the way GitHub would, with the screenshot inline, and
+exposes `/_fixture/issues` (JSON), `/_fixture/calls` (every API request the server
+made) and `/_fixture/reset`.
+
+### End-to-end tests and screenshots
+
+Playwright drives the real client bundle against the real server, with the fake
+GitHub behind it. It boots `npm run fixture` itself.
+
+```bash
+npx playwright install chromium   # once
+npm run test:e2e
+```
+
+The suite clicks the button, draws with the pen, box and text tools, types a note,
+sends, and then asserts what reached the fake GitHub: the title, the context rows,
+and that the linked image is a real PNG. It also checks that the password field is
+black in the capture, that cancel files nothing, that undo and delete work, and that
+a server failure keeps the drawing on screen. Each run writes `e2e/screenshots/`:
+
+| | |
+|---|---|
+| `1-page.png` | the demo page with the button |
+| `2-overlay.png` | the frozen capture with the toolbar |
+| `3-annotated.png` | after drawing and typing a note |
+| `4-sent.png` | the confirmation toast |
+| `5-issue.png` | the issue as rendered by the fake GitHub |
+| `6-masking.png` | password and `data-report-mask` blacked out |
+| `7-failed.png` | the failure toast with the overlay kept |
+
 ## Development
 
 ```bash
 npm run dev        # builds the client, runs the server from source with --watch
-npm test           # node:test, with a stubbed GitHub API
+npm test           # node:test unit tests against the fake GitHub
+npm run test:e2e   # Playwright, see above
+npm run test:all
 npm run typecheck
 npm run build      # dist/report-button.js (script tag), dist/report-button.esm.js, dist/server.js
 ```

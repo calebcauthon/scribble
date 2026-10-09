@@ -122,7 +122,7 @@ export default class AnnotationCanvas {
     this.accent = opts.accentColor ?? '#394EFF'
     this.submitLabel = opts.submitLabel ?? 'Send report'
 
-    this.canvas = hide(document.createElement('canvas'))
+    this.canvas = hide(document.createElement('canvas'), 'canvas')
     Object.assign(this.canvas.style, {
       position: 'fixed',
       left: '0',
@@ -171,7 +171,7 @@ export default class AnnotationCanvas {
   }
 
   private buildToolbar(notePlaceholder: string): HTMLDivElement {
-    const bar = hide(document.createElement('div'))
+    const bar = hide(document.createElement('div'), 'toolbar')
     Object.assign(bar.style, {
       position: 'fixed',
       left: '50%',
@@ -240,7 +240,7 @@ export default class AnnotationCanvas {
 
     bar.appendChild(this.separator())
 
-    const note = hide(document.createElement('input'))
+    const note = hide(document.createElement('input'), 'note')
     note.type = 'text'
     note.placeholder = notePlaceholder
     note.maxLength = 500
@@ -567,7 +567,7 @@ export default class AnnotationCanvas {
   private openTextInput(x: number, y: number) {
     this.commitTextInput()
 
-    const input = hide(document.createElement('input'))
+    const input = hide(document.createElement('input'), 'text-input')
     input.type = 'text'
     input.placeholder = 'Type, then press Enter'
     Object.assign(input.style, {
@@ -809,7 +809,7 @@ export default class AnnotationCanvas {
     // image that gets sent. Annotating the live page instead meant any scroll between
     // two marks desynchronised them from the frozen screenshot, and it hid the privacy
     // masking, so people never saw which fields had been blacked out.
-    const backdrop = hide(handlers.screenshot)
+    const backdrop = hide(handlers.screenshot, 'screenshot')
     Object.assign(backdrop.style, {
       position: 'fixed',
       left: '0',

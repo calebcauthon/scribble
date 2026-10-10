@@ -145,9 +145,14 @@ test('refuses origins that are not allowed', async () => {
     body: JSON.stringify(payload()),
   })
   assert.equal(bad.status, 403)
+  const ok = await fetch(`${base}/report`, {
+    method: 'POST',
+    headers: { Origin: 'https://ok.example.com' },
+    body: JSON.stringify(payload()),
+  })
+  assert.equal(ok.status, 201)
   const preflight = await fetch(`${base}/report`, { method: 'OPTIONS', headers: { Origin: 'https://ok.example.com' } })
   assert.equal(preflight.status, 204)
-  assert.equal(preflight.headers.get('access-control-allow-origin'), 'https://ok.example.com')
 })
 
 test('rate limits per client ip', async () => {

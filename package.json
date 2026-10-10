@@ -4,9 +4,15 @@
   "description": "A drop-in \"Report a problem\" button: the user annotates a screenshot of what they see, and it lands as a GitHub issue.",
   "license": "MIT",
   "author": "Caleb Cauthon",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/calebcauthon/report-button.git"
+  },
   "type": "module",
   "main": "./dist/report-button.esm.js",
   "module": "./dist/report-button.esm.js",
+  "jsdelivr": "./dist/report-button.js",
+  "unpkg": "./dist/report-button.js",
   "types": "./dist/types/client/index.d.ts",
   "exports": {
     ".": {
@@ -32,7 +38,8 @@
     "fixture": "npm run build:client && node --experimental-strip-types --no-warnings fixture/start.ts",
     "test:e2e": "playwright test",
     "test:all": "npm test && npm run test:e2e",
-    "readme-images": "npm run build:client && node --experimental-strip-types --no-warnings scripts/readme-images.ts"
+    "readme-images": "npm run build:client && node --experimental-strip-types --no-warnings scripts/readme-images.ts",
+    "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
     "html2canvas": "^1.4.1"

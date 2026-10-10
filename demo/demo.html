@@ -51,10 +51,14 @@
   <script src="/report-button.js" data-link-to-issue data-manual></script>
   <script>
     // Manual init so we can pass a context() function; drop `data-manual` to let
-    // the script tag mount itself instead.
+    // the script tag mount itself instead. `?repo=owner/name` tries the repo flow
+    // (relay if connected, else GitHub); `?repo=` alone shows the setup panel.
+    const repo = new URLSearchParams(location.search).get('repo')
+    const where = repo === null ? { endpoint: '/report' } : { repo, relay: location.origin }
     ReportButton.init({
-      endpoint: '/report',
+      ...where,
       linkToIssue: true,
+      installSnippet: (r) => `<script src="${location.origin}/report-button.js" data-repo="${r}"><\/script>`,
       context: () => ({ 'Demo user': 'pat@example.com', Build: 'demo' }),
     })
   </script>

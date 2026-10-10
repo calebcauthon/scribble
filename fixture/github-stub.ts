@@ -1,20 +1,23 @@
 /**
  * An in-memory stand-in for the slice of GitHub that report-button talks to.
  *
- * API side (what the server calls): git refs/blobs/trees/commits and issue creation.
+ * API side (what the server calls): git refs/blobs/trees/commits, issue creation, and
+ * the GitHub App endpoints (installation lookup, installation tokens, file contents).
  * Web side (what a person opens): the `?raw=true` screenshot URLs the issue body links
  * to, a minimal issue page, and `/_fixture/*` endpoints to inspect or reset state.
  *
  * Both sides live on one port so GITHUB_API_URL and GITHUB_WEB_URL can point at it.
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
-import { createHash } from 'node:crypto'
+import { createHash, createVerify } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
 
 export interface StubCall {
   method: string
   path: string
   body: unknown
+  /** The bearer token the caller sent. */
+  auth?: string
 }
 
 export interface StubIssue {
@@ -32,6 +35,12 @@ export interface StubOptions {
   branchExists?: boolean
   /** Answer issue creation with 403, to exercise the failure path. */
   failIssue?: boolean
+  /** App mode: the app's public key. App-level calls must carry a JWT it verifies. */
+  appPublicKey?: string
+  /** App mode: repos the app is installed on, `owner/name` -> installation id. */
+  installations?: Record<string, number>
+  /** Files readable through the contents API, keyed `owner/name:path`. */
+  files?: Record<string, string>
 }
 
 export interface GitHubStub {
@@ -44,6 +53,15 @@ export interface GitHubStub {
   listen(port?: number, host?: string): Promise<string>
   close(): Promise<void>
   reset(): void
+}
+
+/** Check an RS256 JWT's signature and expiry, the way GitHub does for app calls. */
+function verifyJwt(jwt: string, publicKey: string): boolean {
+  const [head, body, sig] = jwt.split('.')
+  if (!head || !body || !sig) return false
+  const ok = createVerify('RSA-SHA256').update(`${head}.${body}`).verify(publicKey, Buffer.from(sig, 'base64url'))
+  const { exp } = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as { exp: number }
+  return ok && exp > Date.now() / 1000
 }
 
 const sha = (s: string | Buffer) => createHash('sha1').update(s).digest('hex')
@@ -84,9 +102,30 @@ export function createGitHubStub(opts: StubOptions = {}): GitHubStub {
     }
 
     // ----- API --------------------------------------------------------------
-    if (path.startsWith('/repos/')) {
-      calls.push({ method, path: path + u.search, body })
+    if (path.startsWith('/repos/') || path.startsWith('/app/')) {
+      const auth = /^Bearer (.+)$/.exec(String(req.headers.authorization ?? ''))?.[1]
+      calls.push({ method, path: path + u.search, body, auth })
       let m: RegExpExecArray | null
+
+      // GitHub App: calls made as the app itself need a JWT signed with its key.
+      const asApp = /^\/repos\/[^/]+\/[^/]+\/installation$/.test(path) || path.startsWith('/app/')
+      if (asApp && !(auth && opts.appPublicKey && verifyJwt(auth, opts.appPublicKey))) {
+        return json(401, { message: 'A JSON web token could not be decoded' })
+      }
+      if ((m = /^\/repos\/([^/]+\/[^/]+)\/installation$/.exec(path))) {
+        const id = opts.installations?.[m[1]]
+        return id ? json(200, { id }) : json(404, { message: 'Not Found' })
+      }
+      if ((m = /^\/app\/installations\/(\d+)\/access_tokens$/.exec(path)) && method === 'POST') {
+        return json(201, { token: `ghs_installation_${m[1]}`, expires_at: new Date(Date.now() + 3600_000).toISOString() })
+      }
+      if ((m = /^\/repos\/([^/]+\/[^/]+)\/contents\/(.+)$/.exec(path)) && method === 'GET') {
+        const file = opts.files?.[`${m[1]}:${m[2]}`]
+        return file === undefined ? json(404, { message: 'Not Found' }) : json(200, { content: Buffer.from(file).toString('base64'), encoding: 'base64' })
+      }
+      if (/^\/repos\/[^/]+\/[^/]+$/.test(path) && method === 'GET') {
+        return json(200, { default_branch: 'main' })
+      }
 
       if ((m = /^\/repos\/[^/]+\/[^/]+\/git\/ref\/heads\/(.+)$/.exec(path))) {
         const head = branches.get(m[1])

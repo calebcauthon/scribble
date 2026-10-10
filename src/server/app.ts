@@ -1,8 +1,10 @@
 import { createServer as createHttpServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { readFile } from 'node:fs/promises'
-import type { Config } from './config.ts'
+import { repoShape, type Config, type GitHubConfig } from './config.ts'
 import { GitHubError, createIssue, uploadAsset } from './github.ts'
+import { GitHubApp, originAllowed } from './githubApp.ts'
 import { assetPath, buildIssue, type Report } from './issue.ts'
+import { renderAppCreated, renderRegisterApp, renderSetup, type SetupState } from './setup.ts'
 
 export interface AppOptions {
   config: Config
@@ -16,7 +18,7 @@ export interface AppOptions {
 const MAX_BODY_BYTES = 30 * 1024 * 1024
 const DATA_URL = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=\s]+)$/
 
-class HttpError extends Error {
+export class HttpError extends Error {
   readonly status: number
   constructor(status: number, message: string) {
     super(message)
@@ -143,22 +145,74 @@ export function createApp(opts: AppOptions): Server {
   const staticDir = opts.staticDir ?? new URL('./', import.meta.url)
   const limiter = new RateLimiter(config.rateLimit)
   const allowAny = config.allowedOrigins.includes('*')
+  const app = config.app ? new GitHubApp(config.app, fetchImpl) : null
+  const webUrl = config.github?.webUrl ?? config.app?.webUrl ?? 'https://github.com'
 
-  const cors = (req: IncomingMessage, res: ServerResponse): boolean => {
-    const origin = req.headers.origin
-    if (!origin) return true // same-origin or non-browser caller
-    if (!allowAny && !config.allowedOrigins.includes(origin)) return false
-    res.setHeader('Access-Control-Allow-Origin', allowAny ? '*' : origin)
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  // Reports carry no credentials, so `*` is safe; which origins may file into which
+  // repo is decided per request by resolveTarget().
+  const cors = (res: ServerResponse) => {
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
     res.setHeader('Access-Control-Max-Age', '86400')
-    if (!allowAny) res.setHeader('Vary', 'Origin')
-    return true
   }
 
   const json = (res: ServerResponse, status: number, body: unknown) => {
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' })
     res.end(JSON.stringify(body))
+  }
+
+  const html = (res: ServerResponse, status: number, page: string) => {
+    res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
+    res.end(page)
+  }
+
+  const baseUrl = (req: IncomingMessage) => {
+    if (config.publicUrl) return config.publicUrl
+    const proto = String(req.headers['x-forwarded-proto'] ?? '').split(',')[0] || 'http'
+    return `${proto}://${req.headers['x-forwarded-host'] ?? req.headers.host ?? 'localhost'}`
+  }
+
+  const isTokenRepo = (repo: string | undefined) =>
+    !!config.github && (!repo || repo.toLowerCase() === config.github.repo.toLowerCase())
+
+  /**
+   * Where a report for `repo` from `origin` goes. Token mode answers for its one repo
+   * (and for reports that name no repo); app mode for any repo the app is installed on.
+   */
+  const resolveTarget = async (repo: string | undefined, origin: string | undefined): Promise<GitHubConfig> => {
+    if (repo !== undefined && !repoShape.test(repo)) throw new HttpError(400, 'repo must look like owner/name')
+    if (isTokenRepo(repo)) {
+      if (origin && !allowAny && !config.allowedOrigins.includes(origin)) throw new HttpError(403, 'origin not allowed')
+      return config.github!
+    }
+    if (!repo) throw new HttpError(400, 'repo is required')
+    if (!app) throw new HttpError(404, `this server only files issues for ${config.github?.repo}`)
+    const target = await app.target(repo)
+    if (!target) throw new HttpError(404, `report-button is not installed on ${repo}`)
+    if (!originAllowed(target.settings, origin)) throw new HttpError(403, `origin not allowed by ${repo}`)
+    return target.github
+  }
+
+  /** What the setup page and /status report about a repo + origin. */
+  const inspect = async (repo: string, origin: string | undefined): Promise<SetupState> => {
+    const state: SetupState = { repo, origin, webUrl, appConfigured: !!app, tokenRepo: config.github?.repo }
+    if (!repoShape.test(repo)) return state
+    if (isTokenRepo(repo)) {
+      state.connected = !origin || allowAny || config.allowedOrigins.includes(origin)
+      return state
+    }
+    if (!app) return state
+    state.installUrl = app.installUrl
+    const token = await app.tokenFor(repo)
+    state.installed = !!token
+    if (!token) return state
+    const settings = await app.settingsFor(repo, token)
+    state.origins = settings.origins
+    state.originAllowed = originAllowed(settings, origin)
+    state.connected = state.originAllowed
+    state.defaultBranch = await app.defaultBranch(repo, token).catch(() => 'main')
+    return state
   }
 
   const serveFile = async (res: ServerResponse, name: string, type: string) => {
@@ -184,16 +238,18 @@ export function createApp(opts: AppOptions): Server {
       throw new HttpError(400, 'body must be JSON')
     }
     const report = parseReport(raw, config.maxImageBytes)
+    const repoField = (raw as Record<string, unknown>).repo
+    const github = await resolveTarget(typeof repoField === 'string' && repoField ? repoField : undefined, req.headers.origin)
 
     const path = assetPath(report)
     const asset = await uploadAsset(
-      config.github,
+      github,
       path,
       report.image.bytes,
       `Screenshot for report ${report.reportId}`,
       fetchImpl,
     )
-    const issue = await createIssue(config.github, buildIssue(report, asset.url), fetchImpl)
+    const issue = await createIssue(github, buildIssue(report, asset.url), fetchImpl)
     log(`report ${report.reportId} from ${ip} -> ${issue.html_url}`)
     json(res, 201, { issueUrl: issue.html_url, issueNumber: issue.number, reportId: report.reportId })
   }
@@ -209,11 +265,48 @@ export function createApp(opts: AppOptions): Server {
         if (route === 'GET /demo' || route === 'GET /demo/') return serveFile(res, 'demo.html', 'text/html; charset=utf-8')
         if (route === 'GET /') {
           res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' })
-          return res.end('report-button server. POST /report, GET /report-button.js, GET /demo, GET /health\n')
+          return res.end('report-button server. POST /report, GET /status, GET /setup, GET /report-button.js, GET /demo, GET /health\n')
+        }
+
+        if (route === 'GET /setup') {
+          const repo = url.searchParams.get('repo')?.trim() ?? ''
+          const origin = url.searchParams.get('origin')?.trim() || undefined
+          const state = repo ? await inspect(repo, origin) : { repo, origin, webUrl, appConfigured: !!app, tokenRepo: config.github?.repo }
+          return html(res, 200, renderSetup({ ...state, installedJustNow: url.searchParams.get('setup_action') === 'install' }))
+        }
+        // One-time registration of the GitHub App via GitHub's manifest flow. Off once
+        // the app is configured, since the callback page shows its private key.
+        if (route === 'GET /setup/app' && !app) return html(res, 200, renderRegisterApp(baseUrl(req), webUrl))
+        if (route === 'GET /setup/app/callback' && !app) {
+          const code = url.searchParams.get('code') ?? ''
+          if (!/^[\w-]+$/.test(code)) throw new HttpError(400, 'missing code')
+          const apiUrl = config.github?.apiUrl ?? 'https://api.github.com'
+          const created = await fetchImpl(`${apiUrl}/app-manifests/${code}/conversions`, {
+            method: 'POST',
+            headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'report-button' },
+          })
+          if (!created.ok) throw new HttpError(502, `GitHub answered ${created.status} converting the manifest code`)
+          return html(res, 200, renderAppCreated((await created.json()) as { id: number; slug: string; pem: string; html_url: string }))
+        }
+
+        if (url.pathname === '/status') {
+          cors(res)
+          if (req.method === 'OPTIONS') {
+            res.writeHead(204)
+            return res.end()
+          }
+          if (req.method !== 'GET') throw new HttpError(405, 'method not allowed')
+          const repo = url.searchParams.get('repo')?.trim() ?? ''
+          const origin = req.headers.origin
+          const state = await inspect(repo, origin)
+          const setup = new URL('/setup', baseUrl(req))
+          setup.searchParams.set('repo', repo)
+          if (origin) setup.searchParams.set('origin', origin)
+          return json(res, 200, { connected: !!state.connected, setupUrl: setup.href })
         }
 
         if (url.pathname === '/report') {
-          if (!cors(req, res)) throw new HttpError(403, 'origin not allowed')
+          cors(res)
           if (req.method === 'OPTIONS') {
             res.writeHead(204)
             return res.end()

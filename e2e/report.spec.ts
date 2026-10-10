@@ -152,3 +152,78 @@ test('shows a failure toast and keeps the overlay when the server rejects', asyn
   await expect(page.getByRole('button', { name: 'Send report' })).toBeEnabled()
   await page.screenshot(shot('7-failed'))
 })
+
+test('a repo the GitHub App is installed on files through the relay', async ({ page, request }) => {
+  await page.goto('/demo?repo=acme/connected')
+  await role(page, 'button').click()
+  await drag(page, 100, 100, 300, 120)
+  await role(page, 'note').fill('Filed by the app')
+  await page.getByRole('button', { name: 'Send report' }).click()
+  await expect(role(page, 'toast')).toContainText('Thanks, your report was sent.')
+
+  const issues = await (await request.get(`${GITHUB}/_fixture/issues`)).json()
+  expect(issues).toHaveLength(1)
+  expect(issues[0].title).toBe('Filed by the app')
+  expect(issues[0].html_url).toBe(`${GITHUB}/acme/connected/issues/1`)
+  const calls = await (await request.get(`${GITHUB}/_fixture/calls`)).json()
+  const filed = calls.find((c: { method: string; path: string }) => c.method === 'POST' && c.path === '/repos/acme/connected/issues')
+  expect(filed.auth).toBe('ghs_installation_42')
+})
+
+test('an unconnected repo opens a prefilled GitHub issue with the screenshot on the clipboard', async ({ page, context, request }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'http://localhost:8787' })
+  await context.route('https://github.com/**', (route) => route.fulfill({ contentType: 'text/html', body: '<h1>new issue</h1>' }))
+  await page.goto('/demo?repo=acme/elsewhere')
+  await role(page, 'button').click()
+  await drag(page, 100, 100, 300, 120)
+  await role(page, 'note').fill('Checkout total is wrong')
+  const submit = page.getByRole('button', { name: 'Open in GitHub' })
+  await expect(submit).toBeVisible()
+  await page.screenshot(shot('8-github-mode'))
+
+  const [tab] = await Promise.all([context.waitForEvent('page'), submit.click()])
+  const url = new URL(tab.url())
+  expect(url.origin + url.pathname).toBe('https://github.com/acme/elsewhere/issues/new')
+  expect(url.searchParams.get('title')).toBe('Checkout total is wrong')
+  const body = url.searchParams.get('body')!
+  expect(body).toMatch(/^<!-- Paste the screenshot here/)
+  expect(body).toContain('> Checkout total is wrong')
+  expect(body).toMatch(/\| \*\*Demo user\*\* \| pat@example\.com \|/)
+  expect(url.searchParams.get('labels')).toBe('user-report')
+
+  await expect(role(page, 'toast')).toContainText('Screenshot copied')
+  await expect(role(page, 'toolbar')).toHaveCount(0)
+  const clip = await page.evaluate(async () => {
+    const [item] = await navigator.clipboard.read()
+    const blob = await item.getType('image/png')
+    return { types: item.types, size: blob.size }
+  })
+  expect(clip.types).toContain('image/png')
+  expect(clip.size).toBeGreaterThan(5000)
+  expect(await (await request.get(`${GITHUB}/_fixture/issues`)).json()).toEqual([])
+})
+
+test('without a repo the button shows setup, which links to the relay setup page', async ({ page }) => {
+  await page.goto('/demo?repo=')
+  await role(page, 'button').click()
+  await expect(role(page, 'setup')).toBeVisible()
+  await expect(role(page, 'toolbar')).toHaveCount(0)
+  await role(page, 'setup-repo').fill('acme/site')
+  await expect(role(page, 'setup-snippet')).toHaveText('<script src="http://localhost:8787/report-button.js" data-repo="acme/site"></script>')
+  await page.screenshot(shot('9-setup-panel'))
+
+  const link = page.getByRole('link', { name: 'install the GitHub App' })
+  const href = await link.getAttribute('href')
+  expect(href).toBe('http://localhost:8787/setup?repo=acme%2Fsite&origin=http%3A%2F%2Flocalhost%3A8787')
+  await page.goto(href!)
+  await expect(page.getByRole('link', { name: 'Install on GitHub' })).toHaveAttribute(
+    'href',
+    `${GITHUB}/apps/report-button-fixture/installations/new`,
+  )
+  await page.screenshot({ ...shot('10-setup-page'), fullPage: true })
+
+  // Once installed, the same page says so and offers the origin lock.
+  await page.goto('/setup?repo=acme/connected&origin=http://localhost:8787')
+  await expect(page.getByRole('heading', { name: /^Connected/ })).toBeVisible()
+  await expect(page.getByRole('link', { name: /Create \.github\/report-button\.yml/ })).toBeVisible()
+})

@@ -11,10 +11,11 @@ try {
 
 const server = createApp({ config })
 server.listen(config.port, () => {
-  console.log(
-    `report-button listening on :${config.port}; issues -> ${config.github.repo}, ` +
-      `screenshots -> ${config.github.assetRepo}@${config.github.assetBranch}`,
-  )
+  const modes = [
+    config.github && `token for ${config.github.repo} (screenshots -> ${config.github.assetRepo}@${config.github.assetBranch})`,
+    config.app && `GitHub App ${config.app.slug} for any repo it is installed on`,
+  ].filter(Boolean)
+  console.log(`report-button listening on :${config.port}; ${modes.join('; ')}`)
 })
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

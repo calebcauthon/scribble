@@ -10,11 +10,11 @@ export { ReportButton }
  *
  * ```js
  * import { init } from 'report-button'
- * const report = init({ endpoint: 'https://reports.example.com/report' })
+ * const report = init({ repo: 'you/your-app' })
  * // later: report.open(), report.destroy()
  * ```
  */
-export function init(options: Options): ReportButton {
+export function init(options: Options = {}): ReportButton {
   return new ReportButton(options)
 }
 

@@ -10,8 +10,8 @@ export class GitHubError extends Error {
 }
 
 /** Thin fetch wrapper over the REST API that turns non-2xx into GitHubError. */
-async function request<T>(
-  cfg: GitHubConfig,
+export async function request<T>(
+  cfg: { apiUrl: string; token?: string },
   method: string,
   path: string,
   body?: unknown,
@@ -20,7 +20,7 @@ async function request<T>(
   const res = await fetchImpl(`${cfg.apiUrl}${path}`, {
     method,
     headers: {
-      Authorization: `Bearer ${cfg.token}`,
+      ...(cfg.token ? { Authorization: `Bearer ${cfg.token}` } : {}),
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
       'User-Agent': 'report-button',

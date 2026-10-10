@@ -37,9 +37,15 @@ test('body embeds the screenshot, quotes the note, and tabulates details', () =>
   assert.match(body, /^!\[Annotated screenshot\]\(https:\/\/github\.com\/o\/r\/blob\/b\/2026-10-09\/x\.png\?raw=true\)/)
   assert.match(body, /> Line one\n> Line two/)
   assert.match(body, /\| \*\*Page\*\* \| https:\/\/app\.example\.com\/orders\/42\?tab=items \|/)
-  assert.match(body, /\| \*\*Viewport\*\* \| 1440×900 @2x \|/)
+  assert.match(body, /\| \*\*Viewport\*\* \| 1440×900, 2x pixel ratio \|/)
   assert.match(body, /\| \*\*User\*\* \| u_123 \|/)
   // Pipes in user-supplied keys and values are escaped so the table survives.
   assert.match(body, /\| \*\*Replay \\\| link\*\* \| https:\/\/r\/1 \|/)
   assert.match(body, /\| \*\*Report id\*\* \| 0f4a1c2e-1111-2222-3333-444455556666 \|/)
+})
+
+test('without an image url the body leaves a paste hint for the reporter', () => {
+  const { body } = buildIssue({ ...base, note: 'Broken' }, null)
+  assert.match(body, /^<!-- Paste the screenshot here/)
+  assert.doesNotMatch(body, /!\[/)
 })

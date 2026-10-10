@@ -1,229 +1,83 @@
 # report-button
 
-A drop-in "Report a problem" button for any web page. The user clicks it, draws on a
-screenshot of exactly what they see, types a note, and sends. It lands as a GitHub
-issue with the annotated screenshot inline.
+A "Report a problem" button for any web page. The user draws on a screenshot of what they
+see, types a note, and it lands as a GitHub issue.
 
-No database, no object storage. The server is a single Node process that talks only to
-GitHub: the screenshot is committed to a branch in your repo and the issue links to it.
+<img src="docs/annotate.png" alt="The annotation overlay: a frozen screenshot with a circle, a box and a text label drawn on it, the password field blacked out, and the toolbar with a note field" width="49%"> <img src="docs/github-issue.jpg" alt="The resulting issue on github.com: the annotated screenshot inline, the note, and a table of page, viewport, browser and context" width="49%">
 
-```
-browser ──POST /report──▶ report-button server ──▶ commit screenshot to <repo>@report-screenshots
-                                                └▶ create issue in <repo> (screenshot inline)
-```
+*Left: the overlay. Right: the issue it filed on github.com.*
 
-![The report flow: a floating button, a frozen capture with masking, drawing tools, a note, and send](docs/annotate.png)
+## Install
 
-## What the user gets
-
-- A floating button in a corner of the page.
-- A frozen screenshot of the viewport to draw on: **select/move**, **pen**, **box**, **text**,
-  five colours, **undo**, **delete**. Shapes stay editable until send; the result is flattened to a PNG.
-- A one-line note field. Its first line becomes the issue title.
-- A "sent" or "couldn't send" toast. On failure the drawing is kept so they can retry.
-
-Password fields and anything marked `data-report-mask` are blacked out *before* the capture,
-and the user sees the blacked-out version while annotating. Pages already marked up for
-OpenReplay (`data-openreplay-masked`, `data-openreplay-obscured`) get the same treatment.
-
-## Run the server
-
-Needs Node 22+ and a GitHub token that can write issues and contents on the target repo.
-A fine-grained personal access token with **Issues: write** and **Contents: write** is enough.
-
-```bash
-npm install
-npm run build
-GITHUB_TOKEN=github_pat_... GITHUB_REPO=you/your-app npm start
-# open http://localhost:8787/demo
+```html
+<script src="https://cdn.jsdelivr.net/npm/report-button@0" data-repo="you/your-app"></script>
 ```
 
-| Variable | Default | Purpose |
+That's the whole install. Leave `data-repo` off and the button asks for the repo and gives
+you the finished tag to paste.
+
+## How it gets to GitHub
+
+| | Works for | Setup |
 |---|---|---|
-| `GITHUB_TOKEN` | required | Token used to create issues and commit screenshots. |
-| `GITHUB_REPO` | required | `owner/name` the issues go to. |
-| `GITHUB_ASSET_REPO` | `GITHUB_REPO` | `owner/name` the screenshots are committed to. Point it at a separate repo if you don't want them in the main one. |
-| `GITHUB_ASSET_BRANCH` | `report-screenshots` | Branch holding the screenshots. Created as an orphan on first use, so it never touches your code history. Delete the branch to purge them. |
-| `GITHUB_LABELS` | `user-report` | Comma-separated labels on every issue. Filter on these: filing is automatic. |
-| `GITHUB_ASSIGNEES` | | Comma-separated GitHub logins. |
-| `ALLOWED_ORIGINS` | `*` | Comma-separated page origins allowed to submit. Set it to your site's origin in production. |
-| `RATE_LIMIT` | `10` | Reports per client IP per minute. `0` disables. |
-| `PORT` | `8787` | |
-| `GITHUB_API_URL`, `GITHUB_WEB_URL` | github.com | For GitHub Enterprise. |
+| **Open in GitHub** (default) | Anyone who can open issues on the repo: your team, testers, contributors | None |
+| **Connected** | Anyone, no GitHub account needed | Install the GitHub App on the repo |
 
-Routes: `POST /report`, `GET /report-button.js` (the client bundle), `GET /demo`, `GET /health`.
+**Open in GitHub** needs no server. On send, the screenshot goes to the clipboard and a
+prefilled new-issue page opens. The reporter pastes the screenshot (Cmd+V) and submits.
 
-### Deploy
+**Connected** runs reports through a relay (the server in this repo) that files them as a
+GitHub App, so reporters don't need an account. When the button isn't connected yet, it
+links to the relay's setup page, which checks your repo and walks you through:
 
-A `Dockerfile` and `railway.json` are included. On Railway: new service from this repo, set
-`GITHUB_TOKEN` and `GITHUB_REPO`, and it builds from the Dockerfile with `/health` as the
-health check. Anywhere else: `docker build -t report-button . && docker run -p 8787:8787 -e GITHUB_TOKEN=... -e GITHUB_REPO=... report-button`.
+1. **Install the app** on the repo. It asks for Issues: write (to open the issue),
+   Contents: write (to commit the screenshot to a separate `report-screenshots` branch) and
+   Metadata: read.
+2. **Optionally lock it to your site**: commit `.github/report-button.yml` (the page
+   prefills it for you):
+   ```yaml
+   origins: [https://app.example.com]   # omit to allow any site
+   labels: [user-report]
+   assignees: octocat
+   ```
 
-## Add the button to a page
+The button checks again every time it opens, so once the app is installed it switches to
+direct filing without a code change.
 
-### Script tag
+## Options
 
-```html
-<script src="https://reports.example.com/report-button.js"></script>
-```
-
-That's it. The endpoint defaults to `/report` on the host the script came from. Tweak with data attributes:
-
-```html
-<script src="https://reports.example.com/report-button.js"
-        data-endpoint="https://reports.example.com/report"
-        data-label="Something wrong?"
-        data-position="bottom-left"
-        data-accent="#0f766e"
-        data-mask=".credit-card, [data-private]"></script>
-```
-
-| Attribute | Purpose |
+| Attribute | |
 |---|---|
-| `data-endpoint` | Where reports are POSTed. |
-| `data-label` | Button text. Default "Report a problem". |
-| `data-position` | `bottom-right` (default), `bottom-left`, `top-right`, `top-left`. |
-| `data-accent` | Button / active-tool colour. |
-| `data-pen` | Initial pen colour. |
-| `data-placeholder` | Note field placeholder. |
-| `data-mask` | Extra selectors to black out, comma-separated. |
-| `data-link-to-issue` | Show a "View issue" link in the confirmation toast. |
-| `data-manual` | Don't auto-mount; call `ReportButton.init({...})` yourself. |
+| `data-repo` | `owner/name` to file into. |
+| `data-relay` | Your relay's URL, if you run your own. `""` means always open GitHub. |
+| `data-label`, `data-position`, `data-accent` | Button text, corner, colour. |
+| `data-mask` | Extra selectors to black out. Password fields and `[data-report-mask]` always are. |
+| `data-manual` | Don't auto-mount. Call `ReportButton.init({...})` yourself. |
 
-### Module
+As a module: `npm install report-button`, then
+`init({ repo, context: () => ({ User: me.email }) })`. Each `context` entry becomes a row
+in the issue, which is the place for a user id or a session-replay link. See
+[`src/client/Report.ts`](src/client/Report.ts) for every option.
 
-```bash
-npm install github:calebcauthon/report-button
-```
+## Running the relay
 
-```js
-import { init } from 'report-button'
+One Node process with no database: it talks only to GitHub. `Dockerfile` and `railway.json`
+are included.
 
-const report = init({
-  endpoint: 'https://reports.example.com/report',
-  buttonLabel: 'Report a problem',
-  showButton: true,          // false: trigger from your own UI with report.open()
-  linkToIssue: false,        // true: toast links to the created issue
-  maskSelectors: ['input[type=password]', '[data-report-mask]', '.credit-card'],
-  context: () => ({          // extra rows in the issue body, gathered at send time
-    User: currentUser.email,
-    Build: BUILD_SHA,
-  }),
-  onSubmitted: ({ issueUrl, issueNumber }) => console.log('filed', issueUrl),
-  onError: (err) => console.error(err),
-})
+- **GitHub App** (any repo that installs it): start the server, open `/setup/app`, click
+  *Create on GitHub*, then set the `GITHUB_APP_ID`, `GITHUB_APP_SLUG` and
+  `GITHUB_APP_PRIVATE_KEY` it shows you.
+- **Token** (one repo): set `GITHUB_TOKEN` (a fine-grained token with Issues and Contents
+  write on that repo) and `GITHUB_REPO`. `ALLOWED_ORIGINS` limits which sites can submit.
 
-report.open()     // start the flow programmatically
-report.destroy()  // remove everything from the page
-```
-
-`html2canvas` is loaded on demand the first time the button is clicked, so it adds
-nothing to your initial bundle.
-
-### With OpenReplay (or any session replay)
-
-Pass the replay link through `context` and the issue links straight to the moment:
-
-```js
-init({
-  endpoint: 'https://reports.example.com/report',
-  context: () => ({ Replay: tracker.getSessionURL({ withCurrentTime: true }) }),
-})
-```
-
-## What ends up in the issue
-
-```
-![Annotated screenshot](https://github.com/you/app/blob/report-screenshots/2026-10-09/<id>.png?raw=true)
-
-> The note the user typed
-
-| | |
-|---|---|
-| **Page** | https://app.example.com/orders/42 |
-| **Reported** | 2026-10-09T15:04:05.000Z |
-| **Viewport** | 1440×900 @2x |
-| **Browser** | Mozilla/5.0 ... |
-| **Language** | en-US |
-| ...your context() rows... |
-| **Report id** | <id> |
-```
-
-The `?raw=true` blob URL renders for private repos too, for anyone who can see the repo.
-
-Rendered, it looks like this (as shown by the fake GitHub in `fixture/`, which mirrors GitHub's markdown):
-
-<img src="docs/issue.png" alt="The filed issue: title from the note, the annotated screenshot inline, and a table of page, viewport, browser and context rows" width="700">
-
-## Things to know
-
-- **The endpoint is public by design.** The reporter's browser has no credentials. Lock
-  `ALLOWED_ORIGINS` to your site and keep the rate limit on. Anyone who can reach the
-  endpoint can create issues in your repo, same as anyone who can see the button.
-- **One click, one issue.** There is no triage step. Use the label to filter.
-- **The capture is the viewport**, not the full page, and it is produced from the DOM by
-  html2canvas: cross-origin images without CORS headers come out blank, and some CSS
-  (filters, backdrop blur, some fonts) renders differently from the browser.
-- **Screenshots are git objects.** Each report is one small commit on the asset branch.
-  For a very high-volume site, point `GITHUB_ASSET_REPO` at a dedicated repo.
-
-## Try it without a GitHub token
-
-`fixture/` holds an in-memory fake of the slice of GitHub this server talks to. One
-command boots it next to the real server and demo page:
-
-```bash
-npm run fixture
-# demo page   http://localhost:8787/demo     click the button, draw, send
-# fake GitHub http://localhost:8790          see the issue and screenshot that landed
-```
-
-The fake renders each issue the way GitHub would, with the screenshot inline, and
-exposes `/_fixture/issues` (JSON), `/_fixture/calls` (every API request the server
-made) and `/_fixture/reset`.
-
-### End-to-end tests and screenshots
-
-Playwright drives the real client bundle against the real server, with the fake
-GitHub behind it. It boots `npm run fixture` itself.
-
-```bash
-npx playwright install chromium   # once
-npm run test:e2e
-```
-
-The suite clicks the button, draws with the pen, box and text tools, types a note,
-sends, and then asserts what reached the fake GitHub: the title, the context rows,
-and that the linked image is a real PNG. It also checks that the password field is
-black in the capture, that cancel files nothing, that undo and delete work, and that
-a server failure keeps the drawing on screen. Each run writes `e2e/screenshots/`:
-
-| | |
-|---|---|
-| `1-page.png` | the demo page with the button |
-| `2-overlay.png` | the frozen capture with the toolbar |
-| `3-annotated.png` | after drawing and typing a note |
-| `4-sent.png` | the confirmation toast |
-| `5-issue.png` | the issue as rendered by the fake GitHub |
-| `6-masking.png` | password and `data-report-mask` blacked out |
-| `7-failed.png` | the failure toast with the overlay kept |
+Both modes can run in the same server. Other settings are in
+[`src/server/config.ts`](src/server/config.ts).
 
 ## Development
 
 ```bash
-npm run dev        # builds the client, runs the server from source with --watch
-npm test           # node:test unit tests against the fake GitHub
-npm run test:e2e   # Playwright, see above
-npm run test:all
-npm run typecheck
-npm run build      # dist/report-button.js (script tag), dist/report-button.esm.js, dist/server.js
-npm run readme-images  # regenerate docs/annotate.png and docs/issue.png from a live run
+npm run fixture    # demo + relay against a fake GitHub: http://localhost:8787/demo
+npm run test:all   # unit tests, then Playwright end to end
 ```
-
-## Origin
-
-Extracted from an OpenReplay fork, where it lived as a tracker plugin backed by OpenReplay's
-Python API, Postgres and S3. This repo keeps the button, the annotation tools and the
-GitHub filing, and drops everything else.
 
 MIT.

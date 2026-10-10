@@ -3,7 +3,7 @@
 A "Report a problem" button for any web page. The user draws on a screenshot of what they
 see, types a note, and it lands as a GitHub issue.
 
-<img src="docs/annotate.png" alt="The annotation overlay: a frozen screenshot with a circle, a box and a text label drawn on it, the password field blacked out, and the toolbar with a note field" width="49%"> <img src="docs/github-issue.jpg" alt="The resulting issue on github.com: the annotated screenshot inline, the note, and a table of page, viewport, browser and context" width="49%">
+<img src="https://cdn.jsdelivr.net/npm/report-button@0/docs/annotate.png" alt="The annotation overlay: a frozen screenshot with a circle, a box and a text label drawn on it, the password field blacked out, and the toolbar with a note field" width="49%"> <img src="https://cdn.jsdelivr.net/npm/report-button@0/docs/github-issue.jpg" alt="The resulting issue on github.com: the annotated screenshot inline, the note, and a table of page, viewport, browser and context" width="49%">
 
 *Left: the overlay. Right: the issue it filed on github.com.*
 
@@ -57,7 +57,7 @@ direct filing without a code change.
 As a module: `npm install report-button`, then
 `init({ repo, context: () => ({ User: me.email }) })`. Each `context` entry becomes a row
 in the issue, which is the place for a user id or a session-replay link. See
-[`src/client/Report.ts`](src/client/Report.ts) for every option.
+[the `Options` type](https://cdn.jsdelivr.net/npm/report-button@0/dist/types/client/Report.d.ts) for every option.
 
 ## Running the relay
 
@@ -71,7 +71,7 @@ are included.
   write on that repo) and `GITHUB_REPO`. `ALLOWED_ORIGINS` limits which sites can submit.
 
 Both modes can run in the same server. Other settings are in
-[`src/server/config.ts`](src/server/config.ts).
+[the `Config` type](https://cdn.jsdelivr.net/npm/report-button@0/dist/types/server/config.d.ts).
 
 ## Development
 

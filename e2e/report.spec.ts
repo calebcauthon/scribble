@@ -227,3 +227,15 @@ test('without a repo the button shows setup, which links to the relay setup page
   await expect(page.getByRole('heading', { name: /^Connected/ })).toBeVisible()
   await expect(page.getByRole('link', { name: /Create \.github\/report-button\.yml/ })).toBeVisible()
 })
+
+test('captures pages styled with modern CSS colour functions', async ({ page }) => {
+  // html2canvas 1.x threw on these, so the overlay never opened on such pages.
+  await page.goto('/demo')
+  await page.addStyleTag({
+    content: `body { background: oklch(0.97 0.01 250); color: lab(20% 10 -30); }
+              h1 { color: color(display-p3 0.8 0.2 0.1); border-bottom: 2px solid oklab(0.6 0.1 0.1); }`,
+  })
+  await role(page, 'button').click()
+  await expect(role(page, 'toolbar')).toBeVisible()
+  await expect(role(page, 'screenshot')).toBeVisible()
+})

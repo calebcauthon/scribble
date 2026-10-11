@@ -71,7 +71,7 @@ function restore(records: MaskRecord[]) {
 export async function captureScreenshot(
   maskSelectors: string[] = DEFAULT_MASK_SELECTORS,
 ): Promise<HTMLCanvasElement> {
-  const { default: html2canvas } = await import('html2canvas')
+  const { default: html2canvas } = await import('html2canvas-pro')
 
   const records = maskSensitiveNodes(maskSelectors)
   const scale = window.devicePixelRatio || 1

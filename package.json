@@ -1,6 +1,6 @@
 {
   "name": "report-button",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "A drop-in \"Report a problem\" button: the user annotates a screenshot of what they see, and it lands as a GitHub issue.",
   "license": "MIT",
   "author": "Caleb Cauthon",

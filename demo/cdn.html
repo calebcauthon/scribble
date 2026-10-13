@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>report-button CDN test</title>
+  <style>
+    body { font: 16px/1.5 system-ui, -apple-system, sans-serif; margin: 0; color: #222; background: #fafafa; }
+    main { max-width: 720px; margin: 0 auto; padding: 32px 16px 120px; }
+    h1 { font-size: 28px; margin: 0 0 8px; }
+    .card { background: #fff; border: 1px solid #e3e3e3; border-radius: 10px; padding: 16px 20px; margin: 16px 0; }
+    form { display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; align-items: center; }
+    form button { grid-column: 2; justify-self: start; }
+    label { font-weight: 600; font-size: 14px; }
+    input { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font: inherit; }
+    button { padding: 8px 14px; border: 0; border-radius: 6px; background: #394eff; color: #fff; font: 600 14px system-ui, sans-serif; cursor: pointer; }
+    pre { background: #f3f4f6; padding: 10px 12px; border-radius: 8px; white-space: pre-wrap; word-break: break-all; font-size: 13px; }
+    .broken { color: #b00020; }
+    .muted { color: #666; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>report-button CDN test</h1>
+    <p>This page loads the <b>published</b> script from jsDelivr, exactly as a site would, then
+      click <b>Report a problem</b> in the corner.</p>
+
+    <div class="card">
+      <form method="get">
+        <label for="repo">Repo</label>
+        <input id="repo" name="repo" placeholder="owner/name (empty shows the setup panel)">
+        <label for="relay">Relay</label>
+        <input id="relay" name="relay" placeholder="optional, e.g. http://localhost:8787">
+        <label for="version">Version</label>
+        <input id="version" name="version" placeholder="0">
+        <button type="submit">Load</button>
+      </form>
+      <p class="muted" id="expect"></p>
+      <pre id="tag"></pre>
+    </div>
+
+    <div class="card">
+      <h2>Order #4821</h2>
+      <p>Status: <span class="broken">⚠ undefined</span> (something to circle)</p>
+      <p>Total: $128.40 · Items: 3 · Shipping: Standard</p>
+      <label for="pw">Password (blacked out in the capture)</label>
+      <input id="pw" type="password" value="hunter2">
+    </div>
+  </main>
+
+  <script>
+    const q = new URLSearchParams(location.search)
+    const repo = q.get('repo')?.trim() ?? ''
+    const relay = q.get('relay')?.trim() ?? ''
+    const version = q.get('version')?.trim() || '0'
+    document.getElementById('repo').value = repo
+    document.getElementById('relay').value = relay
+    document.getElementById('version').value = q.get('version') ?? ''
+
+    // Build the same tag a site would paste, and run it.
+    const s = document.createElement('script')
+    s.src = `https://cdn.jsdelivr.net/npm/report-button@${encodeURIComponent(version)}`
+    if (repo) s.dataset.repo = repo
+    if (relay) s.dataset.relay = relay
+    document.body.appendChild(s)
+
+    const attrs = [`src="${s.src}"`, repo && `data-repo="${repo}"`, relay && `data-relay="${relay}"`].filter(Boolean)
+    document.getElementById('tag').textContent = `<script ${attrs.join(' ')}><\/script>`
+    document.getElementById('expect').textContent = !repo
+      ? 'No repo: the button opens the setup panel.'
+      : relay
+        ? 'Repo + relay: "Send report" if the relay is connected to the repo, otherwise "Open in GitHub".'
+        : 'Repo, no relay: the button opens a prefilled GitHub issue with the screenshot on your clipboard.'
+  </script>
+</body>
+</html>

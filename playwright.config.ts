@@ -16,6 +16,8 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1100, height: 720 } } }],
   webServer: {
     command: 'npm run fixture',
+    // Pinned, so a busy port fails the run instead of moving where the tests can't see it.
+    env: { PORT: '8787', FIXTURE_GITHUB_PORT: '8790' },
     url: 'http://localhost:8787/health',
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,

@@ -263,9 +263,10 @@ export function createApp(opts: AppOptions): Server {
         if (route === 'GET /health') return json(res, 200, { ok: true })
         if (route === 'GET /report-button.js') return serveFile(res, 'report-button.js', 'application/javascript; charset=utf-8')
         if (route === 'GET /demo' || route === 'GET /demo/') return serveFile(res, 'demo.html', 'text/html; charset=utf-8')
+        if (route === 'GET /demo/cdn') return serveFile(res, 'cdn.html', 'text/html; charset=utf-8')
         if (route === 'GET /') {
           res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' })
-          return res.end('report-button server. POST /report, GET /status, GET /setup, GET /report-button.js, GET /demo, GET /health\n')
+          return res.end('report-button server. POST /report, GET /status, GET /setup, GET /report-button.js, GET /demo, GET /demo/cdn, GET /health\n')
         }
 
         if (route === 'GET /setup') {

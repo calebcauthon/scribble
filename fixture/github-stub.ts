@@ -224,7 +224,13 @@ export function createGitHubStub(opts: StubOptions = {}): GitHubStub {
       return url
     },
     async listen(port = 0, host = '127.0.0.1') {
-      await new Promise<void>((resolve) => server.listen(port, host, resolve))
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject)
+        server.listen(port, host, () => {
+          server.off('error', reject)
+          resolve()
+        })
+      })
       url = `http://${host === '0.0.0.0' ? 'localhost' : host}:${(server.address() as AddressInfo).port}`
       return url
     },

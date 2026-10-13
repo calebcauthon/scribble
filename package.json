@@ -29,7 +29,7 @@
   },
   "scripts": {
     "build": "npm run build:client && npm run build:server && npm run build:types",
-    "build:client": "esbuild src/client/browser.ts --bundle --minify --format=iife --target=es2020 --outfile=dist/report-button.js && esbuild src/client/index.ts --bundle --format=esm --target=es2020 --packages=external --outfile=dist/report-button.esm.js && cp demo/demo.html dist/demo.html",
+    "build:client": "esbuild src/client/browser.ts --bundle --minify --format=iife --target=es2020 --outfile=dist/report-button.js && esbuild src/client/index.ts --bundle --format=esm --target=es2020 --packages=external --outfile=dist/report-button.esm.js && cp demo/demo.html demo/cdn.html dist/",
     "build:server": "esbuild src/server/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/server.js",
     "build:types": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",

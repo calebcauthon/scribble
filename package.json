@@ -6,7 +6,7 @@
   "author": "Caleb Cauthon",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/calebcauthon/report-button.git"
+    "url": "git+https://github.com/calebcauthon/scribble.git"
   },
   "type": "module",
   "main": "./dist/report-button.esm.js",

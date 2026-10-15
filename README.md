@@ -1,7 +1,8 @@
-# report-button
+# Scribble
 
 A "Report a problem" button for any web page. The user draws on a screenshot of what they
-see, types a note, and it lands as a GitHub issue.
+see, types a note, and it lands as a GitHub issue. On npm it is
+[`report-button`](https://www.npmjs.com/package/report-button).
 
 <img src="https://cdn.jsdelivr.net/npm/report-button@0/docs/annotate.png" alt="The annotation overlay: a frozen screenshot with a circle, a box and a text label drawn on it, the password field blacked out, and the toolbar with a note field" width="49%"> <img src="https://cdn.jsdelivr.net/npm/report-button@0/docs/github-issue.jpg" alt="The resulting issue on github.com: the annotated screenshot inline, the note, and a table of page, viewport, browser and context" width="49%">
 
